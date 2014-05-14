@@ -603,7 +603,12 @@ namespace mongo {
             // that all threads going live as secondary are transitioning
             // from RS_RECOVERING.
             changeState(MemberState::RS_RECOVERING);
-            tryToGoLiveAsASecondary();
+            if (replSettings.startInRecovery) {
+                _maintenanceMode++;
+            }
+            else {
+                tryToGoLiveAsASecondary();
+            }
         }
     }
 
