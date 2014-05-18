@@ -36,9 +36,9 @@
 #include "mongo/client/dbclientcursor.h"
 #include "mongo/client/remote_loader.h"
 
-using namespace mongo;
+//using namespace mongo;
 
-namespace po = boost::program_options;
+//namespace po = boost::program_options;
 
 class Restore : public BSONTool {
 public:
