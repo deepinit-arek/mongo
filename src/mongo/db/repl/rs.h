@@ -365,7 +365,6 @@ namespace mongo {
         const Member* getMemberToSyncTo();
         void veto(const string& host, unsigned secs=10);
         bool gotForceSync();
-        void goStale(const Member* stale, GTID remoteGTID);
         void goToRollbackState();
         void leaveRollbackState();
     private:
