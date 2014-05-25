@@ -390,7 +390,7 @@ namespace mongo {
         return ok();
     }
 
-    shared_ptr<Cursor> RangePartitionCursorGenerator::makeSubCursor(uint64_t partitionIndex) {
+    shared_ptr<Cursor> RangePartitionCursorGenerator::_makeSubCursor(uint64_t partitionIndex) {
         shared_ptr<CollectionData> currColl = _pc->getPartition(partitionIndex);
         // an optimization for a future day may be
         // if we know that the entire partition falls between startKey
@@ -407,7 +407,7 @@ namespace mongo {
             );
     }
 
-    shared_ptr<Cursor> BoundsPartitionCursorGenerator::makeSubCursor(uint64_t partitionIndex) {
+    shared_ptr<Cursor> BoundsPartitionCursorGenerator::_makeSubCursor(uint64_t partitionIndex) {
         shared_ptr<CollectionData> currColl = _pc->getPartition(partitionIndex);
         // I am not sure this case is currently possible
         // because the index is just a simple _id index
@@ -424,7 +424,15 @@ namespace mongo {
             );
     }
 
-    shared_ptr<Cursor> ExhaustivePartitionCursorGenerator::makeSubCursor(uint64_t partitionIndex) {
+    shared_ptr<Cursor> SinglePartitionCursorGenerator::makeSubCursor(uint64_t partitionIndex) {
+        try {
+            return _makeSubCursor(partitionIndex);
+        } catch (storage::RetryableException::MvccDictionaryTooNew) {
+            return shared_ptr<Cursor>(new DummyCursor(_direction));
+        }
+    }
+
+    shared_ptr<Cursor> ExhaustivePartitionCursorGenerator::_makeSubCursor(uint64_t partitionIndex) {
         shared_ptr<CollectionData> currColl = _pc->getPartition(partitionIndex);
         if (_cursorOverPartitionKey) {
             return Cursor::make(
