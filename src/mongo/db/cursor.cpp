@@ -22,6 +22,7 @@
 #include "mongo/db/kill_current_op.h"
 #include "mongo/db/queryutil.h"
 #include "mongo/db/collection.h"
+#include "mongo/db/storage/exception.h"
 
 namespace mongo {
 
@@ -428,7 +429,8 @@ namespace mongo {
         try {
             return _makeSubCursor(partitionIndex);
         } catch (storage::RetryableException::MvccDictionaryTooNew) {
-            return shared_ptr<Cursor>(new DummyCursor(_direction));
+            // this is how we make a dummy cursor, as it's only constructor is private
+            return Cursor::make(NULL);
         }
     }
 
