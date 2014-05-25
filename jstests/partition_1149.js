@@ -1,4 +1,4 @@
-t = db.part_ops;
+t = db.part_1149;
 tname = "part_1149";
 
 // test if a partition is added while a transaction is live,
@@ -8,7 +8,7 @@ t.drop();
 assert.commandWorked(db.runCommand({ create: tname, partitioned:1}));
 assert.commandWorked(db.runCommand({addPartition:tname, newMax:{_id:10} }));
 t.insert([ {_id:1} , {_id:11} ]);
-assert( db.getLastError() );
+assert.eq(null, db.getLastError());
 
 function checkData() {
     assert.eq(t.count(), 2);
