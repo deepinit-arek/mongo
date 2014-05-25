@@ -325,7 +325,7 @@ namespace mongo {
             return _pk;
         }
 
-        bool isVisibleFromCurrentTransaction() const = 0;
+        virtual bool isVisibleFromCurrentTransaction() const = 0;
 
     protected:
         CollectionData(const StringData& ns, const BSONObj &pkIndexPattern) :
@@ -1505,15 +1505,7 @@ namespace mongo {
         // for now, no multikey indexes on partitioned collections
         virtual bool isMultiKey(int i) const;
         
-        bool isVisibleFromCurrentTransaction() const {
-            for (IndexCollVector::const_iterator it = _partitions.begin(); it != _partitions.end(); ++it) {
-                CollectionData *cd = it->get();
-                if (!cd->isVisibleFromCurrentTransaction()) {
-                    return false;
-                }
-            }
-            return true;
-        }
+        virtual bool isVisibleFromCurrentTransaction() const;
 
         // table scan
         virtual shared_ptr<Cursor> makeCursor(const int direction, const bool countCursor);
@@ -1581,7 +1573,7 @@ namespace mongo {
         void dropPartition(uint64_t id);
         void addPartition();
         void manuallyAddPartition(const BSONObj& newPivot, const BSONObj &partitionInfo);
-        void getPartitionInfo(uint64_t* numPartitions, BSONArray* partitionArray);
+        void getPartitionInfo(uint64_t* numPartitions, BSONArray* partitionArray) const;
         void addClonedPartitionInfo(const vector<BSONElement> &partitionInfo);
         BSONObj getPartitionMetadata(uint64_t index);
         void updatePartitionMetadata(uint64_t index, BSONObj newMetadata, bool checkCreateTime = true);

@@ -40,6 +40,7 @@
 #include "mongo/scripting/engine.h"
 #include "mongo/db/storage/assert_ids.h"
 #include "mongo/db/queryutil.h"
+#include "mongo/db/storage/exception.h"
 
 namespace mongo {
 
@@ -538,7 +539,7 @@ namespace mongo {
     bool CollectionBase::isVisibleFromCurrentTransaction() const {
         massert(17355, "collection has no indexes", _indexes.size() >= 1);
         try {
-            _indexes[0].getCursor();
+            _indexes[0]->getCursor(0);
         } catch (storage::RetryableException::MvccDictionaryTooNew &e) {
             return false;
         }
@@ -2876,6 +2877,26 @@ namespace mongo {
         return false;
     }
 
+    bool PartitionedCollection::isVisibleFromCurrentTransaction() const {
+        // first, let's check that the number of partitions is the same as the number
+        // this transaction sees
+        uint64_t numPartitionsInTxn;
+        BSONArray partitionArray;
+        getPartitionInfo(&numPartitionsInTxn, &partitionArray);
+        if (numPartitions() != numPartitionsInTxn) {
+            return false;
+        }
+        // at this point, we know the number of partitions match, so all we
+        // need to do is check that each individual partition is visible as well.
+        for (IndexCollVector::const_iterator it = _partitions.begin(); it != _partitions.end(); ++it) {
+            CollectionData *cd = it->get();
+            if (!cd->isVisibleFromCurrentTransaction()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     bool PartitionedCollection::ensureIndex(const BSONObj &info) {
         // Contract is for ensureIndex to
         // check if index already exists. Therefore, this
@@ -3318,7 +3339,7 @@ namespace mongo {
     }
 
     // returns the partition info with field names for the pivots filled in
-    void PartitionedCollection::getPartitionInfo(uint64_t* numPartitions, BSONArray* partitionArray) {
+    void PartitionedCollection::getPartitionInfo(uint64_t* numPartitions, BSONArray* partitionArray) const {
         BSONArrayBuilder b;
         // reason we run through this twice is to make it simple
         // to know when we are at the last element
