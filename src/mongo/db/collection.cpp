@@ -3534,8 +3534,8 @@ namespace mongo {
         BSONObj newPK = getValidatedPKFromObject(newObj);
         int newPartition = partitionWithRow(newObj);
         if (newPartition != whichPartition) {
-            _partitions[whichPartition]->deleteObject(newPK, newObj, 0);
-            _partitions[newPartition]->insertObject(newObj, 0, indexBitChanged);
+            _partitions[whichPartition]->deleteObject(newPK, newObj, flags);
+            _partitions[newPartition]->insertObject(newObj, flags, indexBitChanged);
         }
     }
 
