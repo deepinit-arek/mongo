@@ -76,13 +76,6 @@ namespace mongo {
                 return true;
             }
 
-            if (highestPriority &&
-                highestPriority->config().priority > hopeful->config().priority) {
-                errmsg = str::stream() << hopeful->fullName() << " has lower priority than " <<
-                    highestPriority->fullName();
-                return true;
-            }
-
             if (!theReplSet->isElectable(id)) {
                 errmsg = str::stream() << "I don't think " << hopeful->fullName() <<
                     " is electable";
@@ -121,11 +114,11 @@ namespace mongo {
             }
             addGTIDToBSON("GTID", ourGTID, result);
             result.append("fresher", weAreFresher);
-			bool veto = shouldVeto(cmdObj, errmsg);
-			result.append("veto", veto);
-			if (veto) {
-				result.append("errmsg", errmsg);
-			} 
+            bool veto = shouldVeto(cmdObj, errmsg);
+            result.append("veto", veto);
+            if (veto) {
+                result.append("errmsg", errmsg);
+            } 
 
             return true;
         }
