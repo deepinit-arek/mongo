@@ -91,6 +91,7 @@ namespace mongo {
             }
             string who = cmdObj["who"].String();
             int cfgver = cmdObj["cfgver"].Int();
+            uint32_t id = cmdObj["id"].Int();
             GTID remoteGTID = getGTIDFromBSON("GTID", cmdObj);
             GTID ourGTID = gtidMgr->getLiveState();
 
@@ -103,7 +104,16 @@ namespace mongo {
             }
             addGTIDToBSON("GTID", ourGTID, result);
             result.append("fresher", weAreFresher);
-            bool veto = shouldVeto(cmdObj["id"].Int(), cfgver, errmsg);
+            bool veto = shouldVeto(id, cfgver, errmsg);
+            // have this check here because once we get to the second phase of the election,
+            // we don't want this to be a reason for an election failure
+            if (!veto) {
+                if (!theReplSet->isElectable(id)) {
+                    errmsg = str::stream() << "I don't think " << theReplSet->findById(id)->fullName() <<
+                        " is electable";
+                    veto = true;
+                }
+            }
             result.append("veto", veto);
             if (veto) {
                 result.append("errmsg", errmsg);
@@ -163,35 +173,8 @@ namespace mongo {
         return !( vUp * 2 > totalVotes() );
     }
 
-    static const int VETO = -10000;
-
-    const time_t LeaseTime = 30;
-
-    SimpleMutex Consensus::lyMutex("ly");
-
-    unsigned Consensus::yea(unsigned memberId) { /* throws VoteException */
-        SimpleMutex::scoped_lock lk(lyMutex);
-        LastYea &L = this->ly.ref(lk);
-        time_t now = time(0);
-        if( L.when + LeaseTime >= now && L.who != memberId ) {
-            LOG(1) << "replSet not voting yea for " << memberId <<
-                   " voted for " << L.who << ' ' << now-L.when << " secs ago" << rsLog;
-            throw VoteException();
-        }
-        L.when = now;
-        L.who = memberId;
+    unsigned Consensus::yea(unsigned memberId) {
         return rs._self->config().votes;
-    }
-
-    /* we vote for ourself at start of election.  once it fails, we can cancel the lease we had in
-       place instead of leaving it for a long time.
-       */
-    void Consensus::electionFailed(unsigned meid) {
-        SimpleMutex::scoped_lock lk(lyMutex);
-        LastYea &L = ly.ref(lk);
-        DEV verify( L.who == meid ); // this may not always always hold, so be aware, but adding for now as a quick sanity test
-        if( L.who == meid )
-            L.when = 0;
     }
 
     /* todo: threading **************** !!!!!!!!!!!!!!!! */
@@ -408,14 +391,15 @@ namespace mongo {
                     /* succeeded. */
                     LOG(1) << "replSet election succeeded, assuming primary role" << rsLog;                    
                     success = rs.assumePrimary();
+                    if (!success) {
+                        log() << "tried to assume primary and failed" << rsLog;
+                    }
                 }
             }
         }
         catch( std::exception& ) {
-            if( !success ) electionFailed(meid);
             throw;
         }
-        if( !success ) electionFailed(meid);
     }
 
     void Consensus::electSelf() {
