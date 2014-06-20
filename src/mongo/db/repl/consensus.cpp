@@ -22,6 +22,47 @@
 
 namespace mongo {
 
+    bool shouldVeto(const uint32_t id, const int config, string& errmsg) {
+        const Member* primary = theReplSet->box.getPrimary();
+        const Member* hopeful = theReplSet->findById(id);
+        const Member *highestPriority = theReplSet->getMostElectable();
+    
+        if( !hopeful ) {
+            errmsg = str::stream() << "replSet couldn't find member with id " << id;
+            return true;
+        }
+        else if( theReplSet->config().version > config ) {
+            errmsg = str::stream() << "replSet member " << id << " is not yet aware its cfg version " << config << " is stale";
+            return true;
+        }
+        else if( theReplSet->isPrimary() )
+        {
+            // hbinfo is not updated, so we have to check the primary's last GTID separately
+            errmsg = str::stream() << "I am already primary, " << hopeful->fullName() <<
+                " can try again once I've stepped down";
+            return true;
+        }
+        else if( primary ) 
+        {
+            // other members might be aware of more up-to-date nodes
+            errmsg = str::stream() << hopeful->fullName() << " is trying to elect itself but " <<
+                primary->fullName() << " is already primary and more up-to-date";
+            return true;
+        }
+        else if( highestPriority && highestPriority->config().priority > hopeful->config().priority) {
+            errmsg = str::stream() << hopeful->fullName() << " has lower priority than " << highestPriority->fullName();
+            return true;
+        }
+    
+        if (!theReplSet->isElectable(id)) {
+            errmsg = str::stream() << "I don't think " << hopeful->fullName() <<
+                " is electable";
+            return true;
+        }
+    
+        return false;
+    }
+
     /** the first cmd called by a node seeking election and it's a basic sanity 
         test: do any of the nodes it can reach know that it can't be the primary?
         */
@@ -37,46 +78,6 @@ namespace mongo {
         }
     private:
 
-        bool shouldVeto(const uint32_t id, const int config, string& errmsg) {
-            const Member* primary = theReplSet->box.getPrimary();
-            const Member* hopeful = theReplSet->findById(id);
-            const Member *highestPriority = theReplSet->getMostElectable();
-
-            if( !hopeful ) {
-                errmsg = str::stream() << "replSet couldn't find member with id " << id;
-                return true;
-            }
-            else if( theReplSet->config().version > config ) {
-                errmsg = str::stream() << "replSet member " << id << " is not yet aware its cfg version " << config << " is stale";
-                return true;
-            }
-            else if( theReplSet->isPrimary() )
-            {
-                // hbinfo is not updated, so we have to check the primary's last GTID separately
-                errmsg = str::stream() << "I am already primary, " << hopeful->fullName() <<
-                    " can try again once I've stepped down";
-                return true;
-            }
-            else if( primary ) 
-            {
-                // other members might be aware of more up-to-date nodes
-                errmsg = str::stream() << hopeful->fullName() << " is trying to elect itself but " <<
-                    primary->fullName() << " is already primary and more up-to-date";
-                return true;
-            }
-            else if( highestPriority && highestPriority->config().priority > hopeful->config().priority) {
-                errmsg = str::stream() << hopeful->fullName() << " has lower priority than " << highestPriority->fullName();
-                return true;
-            }
-
-            if (!theReplSet->isElectable(id)) {
-                errmsg = str::stream() << "I don't think " << hopeful->fullName() <<
-                    " is electable";
-                return true;
-            }
-
-            return false;
-        }
 
         virtual bool run(const string& , BSONObj& cmdObj, int, string& errmsg, BSONObjBuilder& result, bool fromRepl) {
             if( !check(errmsg, result) ) {
@@ -204,41 +205,18 @@ namespace mongo {
         OID round = cmd["round"].OID();
         int myver = rs.config().version;
 
-        const Member* primary = rs.box.getPrimary();
         const Member* hopeful = rs.findById(whoid);
-        const Member* highestPriority = rs.getMostElectable();
 
         int vote = 0;
+        string errmsg;
         if( set != rs.name() ) {
             log() << "replSet error received an elect request for '" << set << "' but our set name is '" << rs.name() << "'" << rsLog;
         }
         else if( myver < cfgver ) {
             // we are stale.  don't vote
         }
-        else if( myver > cfgver ) {
-            // they are stale!
-            log() << "replSet electCmdReceived info got stale version # during election" << rsLog;
-            vote = -10000;
-        }
-        else if( !hopeful ) {
-            log() << "replSet electCmdReceived couldn't find member with id " << whoid << rsLog;
-            vote = -10000;
-        }
-        else if( primary && primary == rs._self)
-        {
-            // hbinfo is not updated, so we have to check the primary's last GTID separately
-            log() << "I am already primary, " << hopeful->fullName()
-                  << " can try again once I've stepped down" << rsLog;
-            vote = -10000;
-        }
-        else if( primary ) {
-            // other members might be aware of more up-to-date nodes
-            log() << hopeful->fullName() << " is trying to elect itself but " <<
-                  primary->fullName() << " is already primary" << rsLog;
-            vote = -10000;
-        }
-        else if( highestPriority && highestPriority->config().priority > hopeful->config().priority) {
-            log() << hopeful->fullName() << " has lower priority than " << highestPriority->fullName();
+        else if (shouldVeto(whoid, cfgver, errmsg)) {
+            log() << "Election vetoed with: " << errmsg << rsLog;
             vote = -10000;
         }
         else {
