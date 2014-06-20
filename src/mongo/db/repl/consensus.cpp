@@ -37,15 +37,7 @@ namespace mongo {
         }
     private:
 
-        bool shouldVeto(const BSONObj& cmdObj, string& errmsg) {
-            GTIDManager* gtidMgr = theReplSet->gtidManager.get();
-            // don't veto older versions
-            if (cmdObj["id"].eoo()) {
-                // they won't be looking for the veto field
-                return false;
-            }
-
-            unsigned id = cmdObj["id"].Int();
+        bool shouldVeto(const uint32_t id, const int config, string& errmsg) {
             const Member* primary = theReplSet->box.getPrimary();
             const Member* hopeful = theReplSet->findById(id);
             const Member *highestPriority = theReplSet->getMostElectable();
@@ -54,17 +46,18 @@ namespace mongo {
                 errmsg = str::stream() << "replSet couldn't find member with id " << id;
                 return true;
             }
-            else if( theReplSet->isPrimary() && 
-                GTID::cmp(gtidMgr->getLiveState(), hopeful->hbinfo().gtid) >= 0)
+            else if( theReplSet->config().version > config ) {
+                errmsg = str::stream() << "replSet member " << id << " is not yet aware its cfg version " << config << " is stale";
+                return true;
+            }
+            else if( theReplSet->isPrimary() )
             {
                 // hbinfo is not updated, so we have to check the primary's last GTID separately
                 errmsg = str::stream() << "I am already primary, " << hopeful->fullName() <<
                     " can try again once I've stepped down";
                 return true;
             }
-            else if( primary && 
-                     hopeful->hbinfo().id() != primary->hbinfo().id() &&
-                     GTID::cmp(primary->hbinfo().gtid, hopeful->hbinfo().gtid) >= 0) 
+            else if( primary ) 
             {
                 // other members might be aware of more up-to-date nodes
                 errmsg = str::stream() << hopeful->fullName() << " is trying to elect itself but " <<
@@ -101,20 +94,15 @@ namespace mongo {
             GTID ourGTID = gtidMgr->getLiveState();
 
             bool weAreFresher = false;
-            if( theReplSet->config().version > cfgver ) {
-                log() << "replSet member " << who << " is not yet aware its cfg version " << cfgver << " is stale" << rsLog;
-                result.append("info", "config version stale");
-                weAreFresher = true;
-            }
             // check not only our own GTID, but any other member we can reach
-            else if (GTID::cmp(remoteGTID, ourGTID) < 0 ||
+            if (GTID::cmp(remoteGTID, ourGTID) < 0 ||
                      GTID::cmp(remoteGTID, theReplSet->lastOtherGTID()) < 0) {                
                 log() << "we are fresher! remoteGTID" << remoteGTID.toString() << " ourGTID " << ourGTID.toString() << " lastOther " << theReplSet->lastOtherGTID() << " " << rsLog;
                 weAreFresher = true;
             }
             addGTIDToBSON("GTID", ourGTID, result);
             result.append("fresher", weAreFresher);
-            bool veto = shouldVeto(cmdObj, errmsg);
+            bool veto = shouldVeto(cmdObj["id"].Int(), cfgver, errmsg);
             result.append("veto", veto);
             if (veto) {
                 result.append("errmsg", errmsg);
