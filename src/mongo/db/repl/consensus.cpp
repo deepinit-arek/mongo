@@ -91,6 +91,7 @@ namespace mongo {
             }
             string who = cmdObj["who"].String();
             int cfgver = cmdObj["cfgver"].Int();
+            uint32_t id = cmdObj["id"].Int();
             GTID remoteGTID = getGTIDFromBSON("GTID", cmdObj);
             GTID ourGTID = gtidMgr->getLiveState();
 
@@ -103,7 +104,16 @@ namespace mongo {
             }
             addGTIDToBSON("GTID", ourGTID, result);
             result.append("fresher", weAreFresher);
-            bool veto = shouldVeto(cmdObj["id"].Int(), cfgver, errmsg);
+            bool veto = shouldVeto(id, cfgver, errmsg);
+            // have this check here because once we get to the second phase of the election,
+            // we don't want this to be a reason for an election failure
+            if (!veto) {
+                if (!theReplSet->isElectable(id)) {
+                    errmsg = str::stream() << "I don't think " << theReplSet->findById(id)->fullName() <<
+                        " is electable";
+                    veto = true;
+                }
+            }
             result.append("veto", veto);
             if (veto) {
                 result.append("errmsg", errmsg);
