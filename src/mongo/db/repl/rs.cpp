@@ -96,7 +96,7 @@ namespace mongo {
         changeState(MemberState::RS_SECONDARY);
     }
     
-    bool ReplSetImpl::assumePrimary() {
+    bool ReplSetImpl::assumePrimary(uint64_t primaryToUse) {
         boost::unique_lock<boost::mutex> lock(stateChangeMutex);
         
         // Make sure replication has stopped
@@ -121,24 +121,7 @@ namespace mongo {
         Lock::GlobalWrite lk(lockReason);
 
         gtidManager->verifyReadyToBecomePrimary();
-
-
-
-
-
-
-
-        // Temporary
-
-
-
-
-
-
-
-
-
-        gtidManager->resetManager(gtidManager->getLiveState().getPrimary() + 1);
+        gtidManager->resetManager(primaryToUse);
         changeState(MemberState::RS_PRIMARY);
         return true;
     }

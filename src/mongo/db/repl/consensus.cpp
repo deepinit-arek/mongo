@@ -117,7 +117,9 @@ namespace mongo {
             result.append("veto", veto);
             if (veto) {
                 result.append("errmsg", errmsg);
-            } 
+            }
+            // stands for "highest known primary"
+            result.append("hkp", gtidMgr->getHighestKnownPrimary());
 
             return true;
         }
@@ -203,13 +205,17 @@ namespace mongo {
             vote = -10000;
         }
         else {
-            try {
+            // TODO: FIX THIS
+            GTIDManager* gtidMgr = theReplSet->gtidManager.get();
+            bool voteYes = cmd["primaryToUse"].ok() && 
+                gtidMgr->acceptPossiblePrimary(cmd["primaryToUse"].numberLong());
+            if (voteYes) {
                 vote = yea(whoid);
                 dassert( hopeful->id() == whoid );
                 log() << "replSet info voting yea for " <<  hopeful->fullName() << " (" << whoid << ')' << rsLog;
             }
-            catch(VoteException&) {
-                log() << "replSet voting no for " << hopeful->fullName() << " already voted for another" << rsLog;
+            else {
+                log() << "Due to bad possible primary, replSet did NOT vote yea for " <<  hopeful->fullName() << " (" << whoid << ')' << rsLog;
             }
         }
 
@@ -239,9 +245,10 @@ namespace mongo {
        @param allUp - set to true if all members are up.  Only set if true returned.
        @return true if we are freshest.  Note we may tie.
     */
-    bool Consensus::weAreFreshest(bool& allUp, int& nTies) {
+    bool Consensus::weAreFreshest(bool& allUp, int& nTies, uint64_t& highestKnownPrimary) {
         nTies = 0;
         GTID ourGTID = rs.gtidManager->getLiveState();
+        highestKnownPrimary = rs.gtidManager->getHighestKnownPrimary();
         BSONObjBuilder cmdBuilder;
         cmdBuilder.append("replSetFresh", 1);
         cmdBuilder.append("set", rs.name());
@@ -287,6 +294,13 @@ namespace mongo {
                     }
                     return false;
                 }
+                // 1.5 members won't be sending this
+                if ( i->result["hpk"].ok()) {
+                    uint64_t memHighestKnownPrimary = i->result["hpk"].numberLong();
+                    if (memHighestKnownPrimary > highestKnownPrimary) {
+                        highestKnownPrimary = memHighestKnownPrimary;
+                    }
+                }
             }
             else {
                 DEV log() << "replSet freshest returns " << i->result.toString() << rsLog;
@@ -313,7 +327,8 @@ namespace mongo {
         
         bool allUp;
         int nTies;
-        if( !weAreFreshest(allUp, nTies) ) {
+        uint64_t highestKnownPrimary = 0;
+        if( !weAreFreshest(allUp, nTies, highestKnownPrimary) ) {
             return;
         }
 
@@ -354,14 +369,15 @@ namespace mongo {
         bool success = false;
         try {
             log() << "replSet info electSelf " << meid << rsLog;
-
+            uint64_t primaryToUse = highestKnownPrimary+1;
             BSONObj electCmd = BSON(
                                    "replSetElect" << 1 <<
                                    "set" << rs.name() <<
                                    "who" << me.fullName() <<
                                    "whoid" << me.hbinfo().id() <<
                                    "cfgver" << rs._cfg->version <<
-                                   "round" << OID::gen() /* this is just for diagnostics */
+                                   "round" << OID::gen() <</* this is just for diagnostics */
+                                   "primaryToUse" << primaryToUse
                                );
 
             int configVersion;
@@ -390,7 +406,7 @@ namespace mongo {
                 else {
                     /* succeeded. */
                     LOG(1) << "replSet election succeeded, assuming primary role" << rsLog;                    
-                    success = rs.assumePrimary();
+                    success = rs.assumePrimary(primaryToUse);
                     if (!success) {
                         log() << "tried to assume primary and failed" << rsLog;
                     }
@@ -411,9 +427,6 @@ namespace mongo {
         }
         catch(RetryAfterSleepException&) {
             throw;
-        }
-        catch(VoteException& ) {
-            log() << "replSet not trying to elect self as responded yea to someone else recently" << rsLog;
         }
         catch(DBException& e) {
             log() << "replSet warning caught unexpected exception in electSelf() " << e.toString() << rsLog;
