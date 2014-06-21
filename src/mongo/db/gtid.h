@@ -27,7 +27,7 @@ namespace mongo {
     class GTID {
         uint64_t _primarySeqNo;
         uint64_t _GTSeqNo;
-        public:
+    public:
         static int cmp(GTID a, GTID b);
         static uint32_t GTIDBinarySize();
         GTID();
@@ -39,9 +39,11 @@ namespace mongo {
         ~GTID(){};
         void serializeBinaryData(char* binData) const;
         void inc();
-        void inc_primary();        
+        void inc_primary();
+        void setPrimaryTo(uint64_t newPrimary);
         string toString() const;
         bool isInitial() const;
+        uint64_t getPrimary() const;
         friend class GTIDManagerTest; // for testing
     };
 
@@ -70,7 +72,7 @@ namespace mongo {
         // some high value that has never actually been given out.
         // So, we use this bool as a signal to getGTIDForPrimary
         // to increment the primary sequence number
-        bool _incPrimary;
+        uint64_t _newPrimaryValue;
         
         // GTID to give out should a primary ask for one to use
         // On a secondary, this is the last GTID seen incremented
@@ -109,8 +111,13 @@ namespace mongo {
         uint64_t _lastHash;
 
         uint32_t _selfID; // used for hash construction
+
+        // specifies the highest known possible primary
+        // It ought to be the minimum of _lastLiveGTID.getPrimary() and
+        // whatever the last value we gave to the election protocol
+        uint64_t _highestKnownPossiblePrimary;
         
-        public:            
+    public:            
         GTIDManager( GTID lastGTID, uint64_t lastTime, uint64_t lastHash, uint32_t id );
         ~GTIDManager();
 
@@ -136,7 +143,7 @@ namespace mongo {
 
         void getMins(GTID* minLiveGTID, GTID* minUnappliedGTID);
         GTID getMinLiveGTID();
-        void resetManager();
+        void resetManager(uint64_t newPrimary);
 
         GTID getLiveState();
         uint64_t getCurrTimestamp();
@@ -155,8 +162,10 @@ namespace mongo {
         void catchUnappliedToLive();
 
         bool rollbackNeeded(const GTID& last, uint64_t lastTime, uint64_t lastHash);
+    private:
+        void handleHighestKnownPrimary();
 
-        friend class GTIDManagerTest; // for testing
+    friend class GTIDManagerTest; // for testing
         
     };
 
