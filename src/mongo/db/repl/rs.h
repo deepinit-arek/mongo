@@ -165,9 +165,9 @@ namespace mongo {
 
     class Consensus {
         ReplSetImpl &rs;
-        unsigned yea(unsigned memberId); // throws VoteException
+        unsigned yea(unsigned memberId);
         void _electSelf();
-        bool weAreFreshest(bool& allUp, int& nTies);
+        bool weAreFreshest(bool& allUp, int& nTies, uint64_t& highestKnownPrimary);
         bool sleptLast; // slept last elect() pass
     public:
         Consensus(ReplSetImpl *t) : rs(*t) {
@@ -386,7 +386,7 @@ namespace mongo {
         bool _stepDown(int secs);
         bool _freeze(int secs);
     private:
-        bool assumePrimary();
+        bool assumePrimary(uint64_t primaryToUse);
         void loadGTIDManager();
         void changeState(MemberState s);
 

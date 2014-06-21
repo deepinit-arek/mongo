@@ -405,4 +405,18 @@ namespace mongo {
             _highestKnownPossiblePrimary = _lastLiveGTID.getPrimary();
         }
     }
+
+    uint64_t GTIDManager::getHighestKnownPrimary() {
+        boost::unique_lock<boost::mutex> lock(_lock);
+        return _highestKnownPossiblePrimary;
+    }
+    
+    bool GTIDManager::acceptPossiblePrimary(uint64_t newPrimary) {
+        boost::unique_lock<boost::mutex> lock(_lock);
+        if (newPrimary > _highestKnownPossiblePrimary) {
+            _highestKnownPossiblePrimary = newPrimary;
+            return true;
+        }
+        return false;
+    }
 } // namespace mongo

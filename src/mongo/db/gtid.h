@@ -162,6 +162,8 @@ namespace mongo {
         void catchUnappliedToLive();
 
         bool rollbackNeeded(const GTID& last, uint64_t lastTime, uint64_t lastHash);
+        uint64_t getHighestKnownPrimary();
+        bool acceptPossiblePrimary(uint64_t newPrimary);
     private:
         void handleHighestKnownPrimary();
 
