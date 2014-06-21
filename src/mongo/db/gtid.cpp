@@ -79,6 +79,11 @@ namespace mongo {
         _GTSeqNo = 0;
     }
 
+    void GTID::setPrimaryTo(uint64_t newPrimary) {
+        _primarySeqNo = newPrimary;
+        _GTSeqNo = 0;
+    }
+
     string GTID::toString() const {
         stringstream ss;
         ss << "primary: " << _primarySeqNo<< " secondary: " << _GTSeqNo;
@@ -87,6 +92,10 @@ namespace mongo {
 
     bool GTID::isInitial() const {
         return (_primarySeqNo == 0);
+    }
+    
+    uint64_t GTID::getPrimary() const {
+        return _primarySeqNo;
     }
 
 
@@ -97,7 +106,8 @@ namespace mongo {
         _lastLiveGTID = lastGTID;
         _minLiveGTID = _lastLiveGTID;
         _minLiveGTID.inc(); // comment this
-        _incPrimary = false;
+        _newPrimaryValue = 0;
+        _highestKnownPossiblePrimary = _lastLiveGTID.getPrimary();
 
         // note that _minUnappliedGTID is not set
 
@@ -121,9 +131,31 @@ namespace mongo {
 
         boost::unique_lock<boost::mutex> lock(_lock);
         dassert(GTID::cmp(_lastLiveGTID, _lastUnappliedGTID) == 0);
-        if (_incPrimary) {
-            _incPrimary = false;
-            _lastLiveGTID.inc_primary();
+        if (_newPrimaryValue > 0) {
+
+
+
+
+
+
+
+
+            // TODO: A CHECK THAT THIS IS FINE
+            // or maybe an massert
+            // putting extra spaces in case I forget,
+            // a code review will find this easily
+
+
+
+
+
+
+
+
+
+
+            _lastLiveGTID.setPrimaryTo(_newPrimaryValue);
+            _newPrimaryValue = 0;
         }
         else {
             _lastLiveGTID.inc();
@@ -139,6 +171,8 @@ namespace mongo {
         _lastTimestamp = *timestamp;
         *hash = (_lastHash* 131 + *timestamp) * 17 + _selfID;
         _lastHash = *hash;
+        
+        handleHighestKnownPrimary();
     }
     
     // notification that user of GTID has completed work
@@ -186,6 +220,8 @@ namespace mongo {
 
         _lastTimestamp = ts;
         _lastHash = lastHash;
+
+        handleHighestKnownPrimary();
 
         _minLiveCond.notify_all();
     }
@@ -256,12 +292,12 @@ namespace mongo {
         return minLive;
     }
 
-    void GTIDManager::resetManager() {
+    void GTIDManager::resetManager(uint64_t newPrimary) {
         boost::unique_lock<boost::mutex> lock(_lock);
         dassert(_liveGTIDs.size() == 0);
         // tell the GTID Manager that the next GTID
         // we get for a primary, we increment the primary
-        _incPrimary = true;
+        _newPrimaryValue = newPrimary;
 
         _minLiveGTID = _lastLiveGTID;
         _minLiveGTID.inc();
@@ -336,6 +372,7 @@ namespace mongo {
 
         _lastTimestamp = lastTime;
         _lastHash = lastHash;
+        handleHighestKnownPrimary();
     }
 
     uint64_t GTIDManager::getCurrTimestamp() {
@@ -361,5 +398,11 @@ namespace mongo {
         return !((GTID::cmp(last, _lastLiveGTID) == 0) && 
                  lastTime == _lastTimestamp && 
                  lastHash == _lastHash);
+    }
+    
+    void GTIDManager::handleHighestKnownPrimary() {
+        if (_lastLiveGTID.getPrimary() > _highestKnownPossiblePrimary) {
+            _highestKnownPossiblePrimary = _lastLiveGTID.getPrimary();
+        }
     }
 } // namespace mongo

@@ -131,7 +131,23 @@ namespace mongo {
 
         gtidManager->verifyReadyToBecomePrimary();
 
-        gtidManager->resetManager();
+
+
+
+
+
+
+        // Temporary
+
+
+
+
+
+
+
+
+
+        gtidManager->resetManager(gtidManager->getLiveState().getPrimary() + 1);
         changeState(MemberState::RS_PRIMARY);
         return true;
     }
