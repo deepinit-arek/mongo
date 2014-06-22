@@ -132,6 +132,9 @@ namespace mongo {
         gtidManager->verifyReadyToBecomePrimary();
         gtidManager->resetManager(primaryToUse);
         changeState(MemberState::RS_PRIMARY);
+        Client::Transaction txn (DB_SERIALIZABLE);
+        OplogHelpers::logComment(BSON("comment" << "assuming primary"));
+        txn.commit(DB_TXN_NOSYNC);
         return true;
     }
 
