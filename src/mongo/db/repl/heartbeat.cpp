@@ -161,7 +161,7 @@ namespace mongo {
                 result
                 );
             result.append("oplogVersion", ReplSetConfig::OPLOG_VERSION);
-            result.append("hpk", theReplSet->gtidManager->getHighestKnownPrimary());
+            result.append("hkp", theReplSet->getHighestKnownPrimaryAcrossSet());
             const Member *syncTarget = BackgroundSync::get()->getSyncTarget();
             if (syncTarget) {
                 result.append("syncingTo", syncTarget->fullName());
@@ -264,6 +264,7 @@ namespace mongo {
 
             HeartbeatInfo mem = m;
             HeartbeatInfo old = mem;
+            bool needsNewStateChecked = false;
             try {
                 BSONObj info;
                 int theirConfigVersion = -10000;
@@ -277,7 +278,7 @@ namespace mongo {
                 }
 
                 if( ok ) {
-                    up(info, mem);
+                    up(info, mem, &needsNewStateChecked);
                 }
                 else if (!info["errmsg"].eoo() && info["errmsg"].str() == "unauthorized") {
                     authIssue(mem);
@@ -305,7 +306,7 @@ namespace mongo {
                 if( old.hbstate != mem.hbstate )
                     log() << "replSet member " << h.toString() << " is now in state " << mem.hbstate.toString() << rsLog;
             }
-            if( changed || now-last>4 ) {
+            if( needsNewStateChecked || changed || now-last>4 ) {
                 last = now;
                 theReplSet->mgr->send( boost::bind(&Manager::msgCheckNewState, theReplSet->mgr) );
             }
@@ -443,7 +444,7 @@ namespace mongo {
             theReplSet->rmFromElectable(mem.id());
         }
 
-        void up(const BSONObj& info, HeartbeatInfo& mem) {
+        void up(const BSONObj& info, HeartbeatInfo& mem, bool* needsNewStateChecked) {
             HeartbeatInfo::numPings++;
             mem.authIssue = false;
 
@@ -478,11 +479,12 @@ namespace mongo {
                 mem.oplogVersion = 0;
             }
             // for "highest known primary"
-            if ( info.hasElement["hpk"]) {
-                mem.highestKnownPrimary = info["hpk"].numberLong();
+            if ( info.hasElement("hkp")) {
+                mem.highestKnownPrimaryInSet = info["hkp"].numberLong();
+                *needsNewStateChecked = theReplSet->handleHighestKnownPrimaryOfMember(mem.highestKnownPrimaryInSet);
             }
             else {
-                mem.highestKnownPrimary = 0;
+                mem.highestKnownPrimaryInSet = 0;
             }
             // see if this member is in the electable set
             if( info["e"].eoo() ) {

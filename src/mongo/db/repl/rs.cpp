@@ -209,6 +209,21 @@ namespace mongo {
         return max;
     }
 
+    // returns true if _highestKnownPrimaryAcrossReplSet changes
+    bool ReplSetImpl::handleHighestKnownPrimaryOfMember(uint64_t hkp) {
+        boost::unique_lock<boost::mutex> lock(_hkpAcrossReplSetMutex);
+        if (hkp > _highestKnownPrimaryAcrossReplSet) {
+            _highestKnownPrimaryAcrossReplSet = hkp;
+            return true;
+        }
+        return false;
+    }
+
+    uint64_t ReplSetImpl::getHighestKnownPrimaryAcrossSet() {
+        boost::unique_lock<boost::mutex> lock(_hkpAcrossReplSetMutex);
+        return _highestKnownPrimaryAcrossReplSet;
+    }
+
     // Note, on input, stateChangeMutex and rslock must be held
     void ReplSetImpl::relinquish(bool startRepl) {
         {
@@ -469,6 +484,7 @@ namespace mongo {
         _replOplogPartitionRunning(false),
         _replKeepOplogAliveRunning(false),
         _keepOplogPeriodMillis(600*1000), // 10 minutes
+        _highestKnownPrimaryAcrossReplSet(0),
         _replBackgroundShouldRun(true),
         elect(this),
         _forceSyncTarget(0),

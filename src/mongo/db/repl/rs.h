@@ -373,6 +373,10 @@ namespace mongo {
         boost::mutex _keepOplogAliveMutex;
         boost::condition_variable _keepOplogAliveCond;
 
+
+        boost::mutex _hkpAcrossReplSetMutex;
+        uint64_t _highestKnownPrimaryAcrossReplSet;
+
         bool _replBackgroundShouldRun;
         
         set<ReplSetHealthPollTask*> healthTasks;
@@ -436,6 +440,8 @@ namespace mongo {
         bool iAmElectable() { lock lk(this); return _electableSet.find(_self->id()) != _electableSet.end(); }
         bool isElectable(const unsigned id) { lock lk(this); return _electableSet.find(id) != _electableSet.end(); }
         Member* getMostElectable();
+        bool handleHighestKnownPrimaryOfMember(uint64_t hkp);
+        uint64_t getHighestKnownPrimaryAcrossSet();
     protected:
         /**
          * Load a new config as the replica set's main config.
