@@ -98,6 +98,7 @@ namespace mongo {
         unsigned int ping; // milliseconds
         static unsigned int numPings;
         uint32_t oplogVersion;
+        uint64_t highestKnownPrimary;
 
         bool up() const { return health > 0; }
 
