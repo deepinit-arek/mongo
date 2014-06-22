@@ -235,7 +235,8 @@ namespace mongo {
         TOKULOG(1) << "Opening IndexDetails " << dname << endl;
         try {
             _db.reset(new storage::Dictionary(dname, _info, *_descriptor, may_create,
-                                              _info["background"].trueValue()));
+                                              _info["background"].trueValue(),
+                                              isIdIndex() ? true : false));
             return true;
         } catch (storage::Dictionary::NeedsCreate) {
             if (cc().upgradingSystemUsers() &&
