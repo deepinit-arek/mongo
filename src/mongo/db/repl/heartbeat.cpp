@@ -161,6 +161,7 @@ namespace mongo {
                 result
                 );
             result.append("oplogVersion", ReplSetConfig::OPLOG_VERSION);
+            result.append("hpk", theReplSet->gtidManager->getHighestKnownPrimary());
             const Member *syncTarget = BackgroundSync::get()->getSyncTarget();
             if (syncTarget) {
                 result.append("syncingTo", syncTarget->fullName());
@@ -475,6 +476,13 @@ namespace mongo {
             }
             else {
                 mem.oplogVersion = 0;
+            }
+            // for "highest known primary"
+            if ( info.hasElement["hpk"]) {
+                mem.highestKnownPrimary = info["hpk"].numberLong();
+            }
+            else {
+                mem.highestKnownPrimary = 0;
             }
             // see if this member is in the electable set
             if( info["e"].eoo() ) {
