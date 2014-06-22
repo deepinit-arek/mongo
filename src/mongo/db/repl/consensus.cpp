@@ -119,7 +119,9 @@ namespace mongo {
                 result.append("errmsg", errmsg);
             }
             // stands for "highest known primary"
-            result.append("hkp", gtidMgr->getHighestKnownPrimary());
+            uint64_t highestKnownPrimaryToUse = std::max(gtidMgr->getHighestKnownPrimary(),
+                theReplSet->getHighestKnownPrimaryAcrossSet());
+            result.append("hkp", highestKnownPrimaryToUse);
 
             return true;
         }
@@ -162,17 +164,35 @@ namespace mongo {
     }
 
     bool Consensus::shouldRelinquish() const {
+        GTID ourLiveState = theReplSet->gtidManager->getLiveState();
+        uint64_t ourHighestKnownPrimary = theReplSet->gtidManager->getHighestKnownPrimary();
         int vUp = rs._self->config().votes;
         for( Member *m = rs.head(); m; m=m->next() ) {
             if (m->hbinfo().up()) {
+                if (GTID::cmp(ourLiveState, m->hbinfo().gtid) < 0) {
+                    log() << "our GTID is" << ourLiveState.toString() << \
+                        ", " << m->fullName() << " has GTID " << m->hbinfo().gtid.toString() << \
+                        ", relinquishing primary" << rsLog;
+                    return true;
+                }
+                uint64_t otherHighestKnownPrimary = m->hbinfo().highestKnownPrimaryInSet;
+                if (ourHighestKnownPrimary < otherHighestKnownPrimary) {
+                    log() << "our highestKnownPrimary " << ourHighestKnownPrimary << \
+                        ", " << m->fullName() << " has highestKnownPrimary " << otherHighestKnownPrimary << \
+                        ", relinquishing primary" << rsLog;
+                }
                 vUp += m->config().votes;
             }
         }
 
         // the manager will handle calling stepdown if another node should be
         // primary due to priority
+        if (!( vUp * 2 > totalVotes())) {
+            log() << "can't see a majority of the set, relinquishing primary" << rsLog;
+            return true;
+        }
 
-        return !( vUp * 2 > totalVotes() );
+        return false;
     }
 
     unsigned Consensus::yea(unsigned memberId) {
@@ -205,10 +225,16 @@ namespace mongo {
             vote = -10000;
         }
         else {
-            // TODO: FIX THIS
             GTIDManager* gtidMgr = theReplSet->gtidManager.get();
-            bool voteYes = cmd["primaryToUse"].ok() && 
-                gtidMgr->acceptPossiblePrimary(cmd["primaryToUse"].numberLong());
+            bool voteYes;
+            if (cmd["primaryToUse"].ok()) {
+                GTID remoteGTID = getGTIDFromBSON("gtid", cmd);
+                gtidMgr->acceptPossiblePrimary(cmd["primaryToUse"].numberLong(), remoteGTID);
+            }
+            else {
+                // it's 1.5 machine, with the older protocol
+                voteYes = true;
+            }
             if (voteYes) {
                 vote = yea(whoid);
                 dassert( hopeful->id() == whoid );
@@ -295,8 +321,8 @@ namespace mongo {
                     return false;
                 }
                 // 1.5 members won't be sending this
-                if ( i->result["hpk"].ok()) {
-                    uint64_t memHighestKnownPrimary = i->result["hpk"].numberLong();
+                if ( i->result["hkp"].ok()) {
+                    uint64_t memHighestKnownPrimary = i->result["hkp"].numberLong();
                     if (memHighestKnownPrimary > highestKnownPrimary) {
                         highestKnownPrimary = memHighestKnownPrimary;
                     }
@@ -370,15 +396,16 @@ namespace mongo {
         try {
             log() << "replSet info electSelf " << meid << rsLog;
             uint64_t primaryToUse = highestKnownPrimary+1;
-            BSONObj electCmd = BSON(
-                                   "replSetElect" << 1 <<
-                                   "set" << rs.name() <<
-                                   "who" << me.fullName() <<
-                                   "whoid" << me.hbinfo().id() <<
-                                   "cfgver" << rs._cfg->version <<
-                                   "round" << OID::gen() <</* this is just for diagnostics */
-                                   "primaryToUse" << primaryToUse
-                               );
+            BSONObjBuilder b;
+            b.append("replSetElect", 1);
+            b.append("set", rs.name());
+            b.append("who", me.fullName());
+            b.append("whoid", me.hbinfo().id());
+            b.append("cfgver", rs._cfg->version);
+            b.append("round", OID::gen());
+            b.append("primaryToUse", primaryToUse);
+            b.append("gtid", theReplSet->gtidManager->getLiveState());
+            BSONObj electCmd = b.obj();
 
             int configVersion;
             list<Target> L;
@@ -402,6 +429,9 @@ namespace mongo {
                 }
                 else if( configVersion != rs.config().version ) {
                     log() << "replSet config version changed during our election, ignoring result" << rsLog;
+                }
+                else if (!theReplSet->gtidManager->acceptPossiblePrimary(primaryToUse, theReplSet->gtidManager->getLiveState())) {
+                    log() << "Could not accept " << primaryToUse << " as a primary GTID value, another election likely ssnuck in"<< rsLog;
                 }
                 else {
                     /* succeeded. */

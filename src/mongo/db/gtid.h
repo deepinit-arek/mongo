@@ -39,7 +39,6 @@ namespace mongo {
         ~GTID(){};
         void serializeBinaryData(char* binData) const;
         void inc();
-        void inc_primary();
         void setPrimaryTo(uint64_t newPrimary);
         string toString() const;
         bool isInitial() const;
@@ -163,7 +162,7 @@ namespace mongo {
 
         bool rollbackNeeded(const GTID& last, uint64_t lastTime, uint64_t lastHash);
         uint64_t getHighestKnownPrimary();
-        bool acceptPossiblePrimary(uint64_t newPrimary);
+        bool acceptPossiblePrimary(uint64_t newPrimary, GTID remoteGTID);
     private:
         void handleHighestKnownPrimary();
 

@@ -74,11 +74,6 @@ namespace mongo {
         _GTSeqNo++;
     }
 
-    void GTID::inc_primary() {
-        _primarySeqNo++;
-        _GTSeqNo = 0;
-    }
-
     void GTID::setPrimaryTo(uint64_t newPrimary) {
         _primarySeqNo = newPrimary;
         _GTSeqNo = 0;
@@ -97,9 +92,6 @@ namespace mongo {
     uint64_t GTID::getPrimary() const {
         return _primarySeqNo;
     }
-
-
-
     
     GTIDManager::GTIDManager( GTID lastGTID, uint64_t lastTime, uint64_t lastHash, uint32_t id ) {
         _selfID = id;
@@ -131,29 +123,9 @@ namespace mongo {
 
         boost::unique_lock<boost::mutex> lock(_lock);
         dassert(GTID::cmp(_lastLiveGTID, _lastUnappliedGTID) == 0);
-        if (_newPrimaryValue > 0) {
-
-
-
-
-
-
-
-
-            // TODO: A CHECK THAT THIS IS FINE
-            // or maybe an massert
-            // putting extra spaces in case I forget,
-            // a code review will find this easily
-
-
-
-
-
-
-
-
-
-
+        // _newPrimaryValue ought to always be greater that _lastLiveGTID.getPrimary(),
+        // so this second check is just paranoia
+        if (_newPrimaryValue > 0 && _newPrimaryValue > _lastLiveGTID.getPrimary()) {
             _lastLiveGTID.setPrimaryTo(_newPrimaryValue);
             _newPrimaryValue = 0;
         }
@@ -411,11 +383,17 @@ namespace mongo {
         return _highestKnownPossiblePrimary;
     }
     
-    bool GTIDManager::acceptPossiblePrimary(uint64_t newPrimary) {
+    bool GTIDManager::acceptPossiblePrimary(uint64_t newPrimary, GTID remoteGTID) {
         boost::unique_lock<boost::mutex> lock(_lock);
-        if (newPrimary > _highestKnownPossiblePrimary) {
+        if (newPrimary > _highestKnownPossiblePrimary && (GTID::cmp(_lastLiveGTID, remoteGTID) <= 0)) {
             _highestKnownPossiblePrimary = newPrimary;
             return true;
+        }
+        else {
+            log() << "Could not accept possible primary, newPrimary " << \
+                newPrimary << " _highestKnownPossiblePrimary " << _highestKnownPossiblePrimary << \
+                "remoteGTID " << remoteGTID.toString() << " our GTID " << _lastLiveGTID.toString() << \
+                endl;
         }
         return false;
     }
