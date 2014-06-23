@@ -397,4 +397,9 @@ namespace mongo {
         }
         return false;
     }
+
+    bool GTIDManager::canAcknowledgeGTID() {
+        boost::unique_lock<boost::mutex> lock(_lock);
+        return _lastLiveGTID.getPrimary() >= _highestKnownPossiblePrimary;
+    }
 } // namespace mongo

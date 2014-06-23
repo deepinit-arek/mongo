@@ -113,7 +113,7 @@ namespace mongo {
 
         // specifies the highest known possible primary
         // It ought to be the minimum of _lastLiveGTID.getPrimary() and
-        // whatever the last value we gave to the election protocol
+        // whatever the last value we voted for in the election protocol
         uint64_t _highestKnownPossiblePrimary;
         
     public:            
@@ -163,6 +163,7 @@ namespace mongo {
         bool rollbackNeeded(const GTID& last, uint64_t lastTime, uint64_t lastHash);
         uint64_t getHighestKnownPrimary();
         bool acceptPossiblePrimary(uint64_t newPrimary, GTID remoteGTID);
+        bool canAcknowledgeGTID();
     private:
         void handleHighestKnownPrimary();
 
