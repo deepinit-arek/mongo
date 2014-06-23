@@ -571,6 +571,7 @@ namespace mongo {
                 GTID lastUnappliedGTID;
                 theReplSet->gtidManager->getLiveGTIDs(&lastLiveGTID, &lastUnappliedGTID);
                 convertOplogToPartitionedIfNecessary(lastLiveGTID);
+                theReplSet->handleHighestKnownPrimaryOfMember(theReplSet->gtidManager->getHighestKnownPrimary());
                 changeState(MemberState::RS_PRIMARY);
             }
             else {

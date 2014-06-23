@@ -435,7 +435,8 @@ namespace mongo {
                 }
                 else {
                     /* succeeded. */
-                    LOG(1) << "replSet election succeeded, assuming primary role" << rsLog;                    
+                    LOG(1) << "replSet election succeeded, assuming primary role" << rsLog;
+                    theReplSet->handleHighestKnownPrimaryOfMember(primaryToUse);
                     success = rs.assumePrimary(primaryToUse);
                     if (!success) {
                         log() << "tried to assume primary and failed" << rsLog;
