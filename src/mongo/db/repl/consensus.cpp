@@ -180,6 +180,7 @@ namespace mongo {
                     log() << "our highestKnownPrimary " << ourHighestKnownPrimary << \
                         ", " << m->fullName() << " has highestKnownPrimary " << otherHighestKnownPrimary << \
                         ", relinquishing primary" << rsLog;
+                    return true;
                 }
                 vUp += m->config().votes;
             }
