@@ -236,7 +236,7 @@ namespace mongo {
         try {
             _db.reset(new storage::Dictionary(dname, _info, *_descriptor, may_create,
                                               _info["background"].trueValue(),
-                                              (isPKIndex() && isIdIndex()) ? true : false));
+                                              isIdIndex() ? true : false));
             return true;
         } catch (storage::Dictionary::NeedsCreate) {
             if (cc().upgradingSystemUsers() &&
