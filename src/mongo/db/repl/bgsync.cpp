@@ -359,7 +359,6 @@ namespace mongo {
             }
         }
 
-        GTID lastGTIDFetched = theReplSet->gtidManager->getLiveState();
         bool acknowledgingWrites = theReplSet->gtidManager->canAcknowledgeGTID();
         OplogReader r(acknowledgingWrites /* doHandshake */);
 
