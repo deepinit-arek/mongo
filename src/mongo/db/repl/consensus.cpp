@@ -54,12 +54,6 @@ namespace mongo {
             return true;
         }
     
-        if (!theReplSet->isElectable(id)) {
-            errmsg = str::stream() << "I don't think " << hopeful->fullName() <<
-                " is electable";
-            return true;
-        }
-    
         return false;
     }
 
@@ -230,7 +224,7 @@ namespace mongo {
             bool voteYes;
             if (cmd["primaryToUse"].ok()) {
                 GTID remoteGTID = getGTIDFromBSON("gtid", cmd);
-                gtidMgr->acceptPossiblePrimary(cmd["primaryToUse"].numberLong(), remoteGTID);
+                voteYes = gtidMgr->acceptPossiblePrimary(cmd["primaryToUse"].numberLong(), remoteGTID);
             }
             else {
                 // it's 1.5 machine, with the older protocol
@@ -432,7 +426,7 @@ namespace mongo {
                     log() << "replSet config version changed during our election, ignoring result" << rsLog;
                 }
                 else if (!theReplSet->gtidManager->acceptPossiblePrimary(primaryToUse, theReplSet->gtidManager->getLiveState())) {
-                    log() << "Could not accept " << primaryToUse << " as a primary GTID value, another election likely ssnuck in"<< rsLog;
+                    log() << "Could not accept " << primaryToUse << " as a primary GTID value, another election likely snuck in"<< rsLog;
                 }
                 else {
                     /* succeeded. */
