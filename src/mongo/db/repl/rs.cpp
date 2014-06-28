@@ -123,6 +123,7 @@ namespace mongo {
         gtidManager->verifyReadyToBecomePrimary();
         gtidManager->resetManager(primaryToUse);
         changeState(MemberState::RS_PRIMARY);
+        log() << "replset assuming primary with value " << primaryToUse << rsLog;
         Client::Transaction txn (DB_SERIALIZABLE);
         OplogHelpers::logComment(BSON("comment" << "assuming primary"));
         txn.commit(DB_TXN_NOSYNC);

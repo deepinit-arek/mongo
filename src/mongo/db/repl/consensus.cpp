@@ -162,20 +162,20 @@ namespace mongo {
         uint64_t ourHighestKnownPrimary = theReplSet->gtidManager->getHighestKnownPrimary();
         int vUp = rs._self->config().votes;
         for( Member *m = rs.head(); m; m=m->next() ) {
+            if (GTID::cmp(ourLiveState, m->hbinfo().gtid) < 0) {
+                log() << "our GTID is" << ourLiveState.toString() << \
+                    ", " << m->fullName() << " has GTID " << m->hbinfo().gtid.toString() << \
+                    ", relinquishing primary" << rsLog;
+                return true;
+            }
+            uint64_t otherHighestKnownPrimary = m->hbinfo().highestKnownPrimaryInSet;
+            if (ourHighestKnownPrimary < otherHighestKnownPrimary) {
+                log() << "our highestKnownPrimary " << ourHighestKnownPrimary << \
+                    ", " << m->fullName() << " has highestKnownPrimary " << otherHighestKnownPrimary << \
+                    ", relinquishing primary" << rsLog;
+                return true;
+            }
             if (m->hbinfo().up()) {
-                if (GTID::cmp(ourLiveState, m->hbinfo().gtid) < 0) {
-                    log() << "our GTID is" << ourLiveState.toString() << \
-                        ", " << m->fullName() << " has GTID " << m->hbinfo().gtid.toString() << \
-                        ", relinquishing primary" << rsLog;
-                    return true;
-                }
-                uint64_t otherHighestKnownPrimary = m->hbinfo().highestKnownPrimaryInSet;
-                if (ourHighestKnownPrimary < otherHighestKnownPrimary) {
-                    log() << "our highestKnownPrimary " << ourHighestKnownPrimary << \
-                        ", " << m->fullName() << " has highestKnownPrimary " << otherHighestKnownPrimary << \
-                        ", relinquishing primary" << rsLog;
-                    return true;
-                }
                 vUp += m->config().votes;
             }
         }
