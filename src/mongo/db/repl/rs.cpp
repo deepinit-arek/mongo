@@ -121,7 +121,13 @@ namespace mongo {
         Lock::GlobalWrite lk(lockReason);
 
         gtidManager->verifyReadyToBecomePrimary();
-        gtidManager->resetManager(primaryToUse);
+        // in between the time the election succeeds and we stop replication
+        // more data may have been replicated that makes primaryToUse obsolete,
+        // resetManager will check this. If the check fails, we don't
+        // assume primary and simply let the election fail.
+        if (!gtidManager->resetManager(primaryToUse)) {
+            return false;
+        }
         changeState(MemberState::RS_PRIMARY);
         log() << "replset assuming primary with value " << primaryToUse << rsLog;
         Client::Transaction txn (DB_SERIALIZABLE);

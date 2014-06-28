@@ -263,11 +263,16 @@ namespace mongo {
         return minLive;
     }
 
-    void GTIDManager::resetManager(uint64_t newPrimary) {
+    bool GTIDManager::resetManager(uint64_t newPrimary) {
         boost::unique_lock<boost::mutex> lock(_lock);
         dassert(_liveGTIDs.size() == 0);
         // tell the GTID Manager that the next GTID
         // we get for a primary, we increment the primary
+        if (_lastLiveGTID.getPrimary() >= newPrimary) {
+            log() << "attempt to resetManager failing, existing primary of _lastLiveGTID: " << \
+                _lastLiveGTID.getPrimary() << " newPrimary: " << newPrimary << endl;
+            return false;
+        }
         _newPrimaryValue = newPrimary;
 
         _minLiveGTID = _lastLiveGTID;
@@ -275,6 +280,7 @@ namespace mongo {
 
         _lastUnappliedGTID = _lastLiveGTID;
         _minUnappliedGTID = _minLiveGTID;
+        return true;
     }
     GTID GTIDManager::getLiveState() {
         boost::unique_lock<boost::mutex> lock(_lock);

@@ -142,7 +142,7 @@ namespace mongo {
 
         void getMins(GTID* minLiveGTID, GTID* minUnappliedGTID);
         GTID getMinLiveGTID();
-        void resetManager(uint64_t newPrimary);
+        bool resetManager(uint64_t newPrimary);
 
         GTID getLiveState();
         uint64_t getCurrTimestamp();
