@@ -378,7 +378,7 @@ namespace mongo {
             if (sleepThisRound) {
                 verify( !rs.lockedByMe() ); // bad to go to sleep locked
                 unsigned ms = ((unsigned) rand()) % 1000 + 50;
-                DEV log() << "replSet tie " << nTies << " sleeping a little " << ms << "ms" << rsLog;
+                log() << "replSet tie " << nTies << " sleeping a little " << ms << "ms" << rsLog;
                 sleptLast = true;
                 sleepmillis(ms);
                 throw RetryAfterSleepException();
