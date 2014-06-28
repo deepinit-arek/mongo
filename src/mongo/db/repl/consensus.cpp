@@ -342,6 +342,8 @@ namespace mongo {
     }
 
     void Consensus::_electSelf() {
+        bool sleepThisRound = !sleptLast;
+        sleptLast = false;
         if( time(0) < steppedDown ) {
             return;
         }
@@ -369,11 +371,11 @@ namespace mongo {
         if( nTies ) {
             /* tie?  we then randomly sleep to try to not collide on our voting. */
             /* todo: smarter. */
-            if( me.id() == 0 || sleptLast ) {
-                // would be fine for one node not to sleep
-                // todo: biggest / highest priority nodes should be the ones that get to not sleep
-            }
-            else {
+            // also, vanilla MongoDB does not sleep if id is 0, because theoretically
+            // one guy doesn't ever need to sleep. I'm not sure that is wise,
+            // as if that guy is constantly trying and failing elections, in MongoDB
+            // he can be freezing other guys out constantly.
+            if (sleepThisRound) {
                 verify( !rs.lockedByMe() ); // bad to go to sleep locked
                 unsigned ms = ((unsigned) rand()) % 1000 + 50;
                 DEV log() << "replSet tie " << nTies << " sleeping a little " << ms << "ms" << rsLog;
@@ -382,7 +384,6 @@ namespace mongo {
                 throw RetryAfterSleepException();
             }
         }
-        sleptLast = false;
 
         time_t start = time(0);
         unsigned meid = me.id();

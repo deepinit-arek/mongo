@@ -170,9 +170,7 @@ namespace mongo {
         bool weAreFreshest(bool& allUp, int& nTies, uint64_t& highestKnownPrimary);
         bool sleptLast; // slept last elect() pass
     public:
-        Consensus(ReplSetImpl *t) : rs(*t) {
-            sleptLast = false;
-            steppedDown = 0;
+        Consensus(ReplSetImpl *t) : rs(*t), sleptLast(false), steppedDown(0) {
         }
 
         /* if we've stepped down, this is when we are allowed to try to elect ourself again.
