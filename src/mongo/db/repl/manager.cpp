@@ -86,9 +86,10 @@ namespace mongo {
         // new election protocol. This is not necessary.
         // Consensus::shouldRelinquish will notice that someone 
         // has a higher known primary, and will cause this machine
-        // to step down. Therefore, we do nothing here.
-
-        rs->box.noteRemoteIsPrimary(m);
+        // to step down. Therefore, we just ignore the second primary.
+        if (!rs->box.getState().primary()) {
+            rs->box.noteRemoteIsPrimary(m);
+        }
     }
 
     void Manager::checkElectableSet() {
