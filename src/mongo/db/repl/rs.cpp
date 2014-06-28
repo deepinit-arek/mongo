@@ -125,7 +125,16 @@ namespace mongo {
         // more data may have been replicated that makes primaryToUse obsolete,
         // resetManager will check this. If the check fails, we don't
         // assume primary and simply let the election fail.
+        uint64_t hkpAcrossSet = getHighestKnownPrimaryAcrossSet();
+        if (primaryToUse < hkpAcrossSet) {
+            log() << "assuming primary with " << primaryToUse << \
+                " failing, because highestKnownPrimaryAcrossSet is " << \
+                hkpAcrossSet << rsLog;
+            return false;
+        }
         if (!gtidManager->resetManager(primaryToUse)) {
+            log() << "assuming primary with " << primaryToUse << \
+                " failing, gtidManager->resetManager returned false." << rsLog;
             return false;
         }
         changeState(MemberState::RS_PRIMARY);
